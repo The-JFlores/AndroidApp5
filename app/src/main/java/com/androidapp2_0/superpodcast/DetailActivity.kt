@@ -1,5 +1,7 @@
 package com.androidapp2_0.superpodcast
 
+import android.content.Context
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.widget.Button
@@ -25,17 +27,20 @@ class DetailActivity : AppCompatActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var playPauseButton: Button
-    private lateinit var buttonBack: Button
     private lateinit var imageArtwork: ImageView
     private lateinit var buttonVolumeUp: Button
     private lateinit var buttonVolumeDown: Button
+    private lateinit var buttonBack: Button
+    private lateinit var audioManager: AudioManager
+
     private var isPlaying = false
     private var previewUrl: String? = null
-    private var currentVolume = 1.0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_detail)
+
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         imageArtwork = findViewById(R.id.imageArtwork)
         playPauseButton = findViewById(R.id.buttonPlayPause)
@@ -76,18 +81,25 @@ class DetailActivity : AppCompatActivity() {
         }
 
         buttonVolumeUp.setOnClickListener {
-            mediaPlayer?.let {
-                currentVolume = (currentVolume + 0.1f).coerceAtMost(1.0f)
-                it.setVolume(currentVolume, currentVolume)
-            }
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                AudioManager.ADJUST_RAISE,
+                AudioManager.FLAG_SHOW_UI
+            )
         }
 
         buttonVolumeDown.setOnClickListener {
-            mediaPlayer?.let {
-                currentVolume = (currentVolume - 0.1f).coerceAtLeast(0.0f)
-                it.setVolume(currentVolume, currentVolume)
-            }
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                AudioManager.ADJUST_LOWER,
+                AudioManager.FLAG_SHOW_UI
+            )
         }
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        finish()
+        return true
     }
 
     private fun loadAudioFromFeed(feedUrl: String) {
@@ -146,7 +158,6 @@ class DetailActivity : AppCompatActivity() {
                     it.start()
                     this@DetailActivity.isPlaying = true
                     playPauseButton.text = "Pause"
-                    setVolume(currentVolume, currentVolume)
                 }
                 setOnCompletionListener {
                     this@DetailActivity.isPlaying = false
