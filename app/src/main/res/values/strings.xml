@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SuperPodcast</string>
+    <string name="podcast_artwork">Podcast artwork</string>
 </resources>
