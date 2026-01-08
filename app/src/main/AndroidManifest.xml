@@ -2,7 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.androidapp2_0.superpodcast">
 
-    <!-- Aquí van los permisos y la etiqueta <application> -->
+    <!-- Permission to allow app to access the internet -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -14,9 +15,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SuperPodcast">
 
-        <activity
-            android:name=".DetailActivity" />
+        <!-- Detail screen for podcast info -->
+        <activity android:name=".DetailActivity" />
 
+        <!-- Main launcher activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true">

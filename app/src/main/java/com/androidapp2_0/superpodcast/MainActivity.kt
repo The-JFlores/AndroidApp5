@@ -1,80 +1,113 @@
 package com.androidapp2_0.superpodcast
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.androidapp2_0.superpodcast.adapter.PodcastAdapter
-import com.androidapp2_0.superpodcast.network.PodcastResponse
-import com.androidapp2_0.superpodcast.network.RetrofitClient
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
+import okhttp3.*
+import org.json.JSONObject
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var podcastAdapter: PodcastAdapter
     private lateinit var recyclerView: RecyclerView
+    private lateinit var adapter: PodcastAdapter
+    private lateinit var editSearch: EditText
+    private lateinit var buttonSearch: Button
+
+    private val client = OkHttpClient()
+    private val podcastList = mutableListOf<Podcast>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
-
         recyclerView = findViewById(R.id.recyclerPodcasts)
-        val editSearch = findViewById<EditText>(R.id.editSearch)
-        val buttonSearch = findViewById<Button>(R.id.buttonSearch)
+        editSearch = findViewById(R.id.editSearch)
+        buttonSearch = findViewById(R.id.buttonSearch)
 
-        podcastAdapter = PodcastAdapter(emptyList()) { podcast ->
-            // TODO: handle click, e.g., open details or play podcast
+        adapter = PodcastAdapter(podcastList) { podcast ->
+            val intent = Intent(this, DetailActivity::class.java).apply {
+                putExtra(DetailActivity.EXTRA_TITLE, podcast.collectionName)
+                putExtra(DetailActivity.EXTRA_ARTIST, podcast.artistName)
+                putExtra(DetailActivity.EXTRA_DESCRIPTION, podcast.description ?: "")
+                putExtra(DetailActivity.EXTRA_PREVIEW_URL, podcast.feedUrl)
+                putExtra(DetailActivity.EXTRA_ARTWORK_URL, podcast.artworkUrl100)
+            }
+            startActivity(intent)
         }
 
-        recyclerView.adapter = podcastAdapter
         recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = adapter
 
         buttonSearch.setOnClickListener {
-            val query = editSearch.text.toString().trim()
-            if (query.isNotEmpty()) {
-                searchPodcasts(query)
-            } else {
-                Toast.makeText(this, "Please enter a search term", Toast.LENGTH_SHORT).show()
+            val term = editSearch.text.toString().trim()
+            if (term.isNotEmpty()) {
+                searchPodcasts(term)
             }
         }
 
-        // Load initial data with default search term
-        searchPodcasts("technology")
+        searchPodcasts("news") // búsqueda por defecto fija
     }
 
     private fun searchPodcasts(term: String) {
-        RetrofitClient.instance.searchPodcasts(term)
-            .enqueue(object : Callback<PodcastResponse> {
-                override fun onResponse(call: Call<PodcastResponse>, response: Response<PodcastResponse>) {
-                    if (response.isSuccessful) {
-                        val podcasts = response.body()?.results ?: emptyList()
-                        podcastAdapter = PodcastAdapter(podcasts) { podcast ->
-                            // TODO: handle click on podcast item
-                        }
-                        recyclerView.adapter = podcastAdapter
-                    } else {
-                        Toast.makeText(this@MainActivity, "Error: ${response.code()}", Toast.LENGTH_SHORT).show()
+        val url = "https://itunes.apple.com/search?entity=podcast&term=${term}"
+
+        val request = Request.Builder().url(url).build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Error searching podcasts", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "Error searching podcasts", Toast.LENGTH_SHORT).show()
                     }
+                    return
                 }
 
-                override fun onFailure(call: Call<PodcastResponse>, t: Throwable) {
-                    Toast.makeText(this@MainActivity, "Failure: ${t.message}", Toast.LENGTH_SHORT).show()
+                val body = response.body?.string() ?: ""
+
+                val json = JSONObject(body)
+                val results = json.getJSONArray("results")
+
+                podcastList.clear()
+
+                for (i in 0 until results.length()) {
+                    val item = results.getJSONObject(i)
+                    val feedUrl = item.optString("feedUrl", "")
+                    if (feedUrl.isEmpty()) continue // Ignorar este item si no tiene feedUrl
+
+                    val podcast = Podcast(
+                        collectionName = item.getString("collectionName"),
+                        artistName = item.getString("artistName"),
+                        feedUrl = feedUrl,
+                        description = item.optString("description", ""),
+                        artworkUrl100 = item.optString("artworkUrl100", "")
+                    )
+                    podcastList.add(podcast)
                 }
-            })
+
+                runOnUiThread {
+                    adapter.notifyDataSetChanged()
+                }
+            }
+        })
     }
+
+    data class Podcast(
+        val collectionName: String,
+        val artistName: String,
+        val feedUrl: String,
+        val description: String?,
+        val artworkUrl100: String?
+    )
 }
