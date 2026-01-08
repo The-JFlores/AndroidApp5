@@ -5,6 +5,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.androidapp2_0.superpodcast.adapter.PodcastAdapter
 import com.androidapp2_0.superpodcast.network.PodcastResponse
 import com.androidapp2_0.superpodcast.network.RetrofitClient
 import retrofit2.Call
@@ -12,6 +15,10 @@ import retrofit2.Callback
 import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var podcastAdapter: PodcastAdapter
+    private lateinit var recyclerView: RecyclerView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -23,7 +30,15 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Retrofit API call to search podcasts with term "technology"
+        recyclerView = findViewById(R.id.recyclerPodcasts)
+
+        podcastAdapter = PodcastAdapter(emptyList()) { podcast ->
+            // Aquí puedes manejar el click en cada podcast, por ejemplo mostrar detalles
+        }
+
+        recyclerView.adapter = podcastAdapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
+
         RetrofitClient.instance.searchPodcasts("technology")
             .enqueue(object : Callback<PodcastResponse> {
                 override fun onResponse(
@@ -32,9 +47,11 @@ class MainActivity : AppCompatActivity() {
                 ) {
                     if (response.isSuccessful) {
                         val podcasts = response.body()?.results ?: emptyList()
-                        podcasts.forEach {
-                            println("Podcast: ${it.collectionName} by ${it.artistName}")
+                        // Actualizar adapter con la lista recibida
+                        podcastAdapter = PodcastAdapter(podcasts) { podcast ->
+                            // Manejar click en podcast
                         }
+                        recyclerView.adapter = podcastAdapter
                     } else {
                         println("API call failed with code: ${response.code()}")
                     }
