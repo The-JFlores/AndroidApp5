@@ -1,6 +1,9 @@
 package com.androidapp2_0.superpodcast
 
 import android.os.Bundle
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -31,34 +34,46 @@ class MainActivity : AppCompatActivity() {
         }
 
         recyclerView = findViewById(R.id.recyclerPodcasts)
+        val editSearch = findViewById<EditText>(R.id.editSearch)
+        val buttonSearch = findViewById<Button>(R.id.buttonSearch)
 
         podcastAdapter = PodcastAdapter(emptyList()) { podcast ->
-            // Aquí puedes manejar el click en cada podcast, por ejemplo mostrar detalles
+            // TODO: handle click, e.g., open details or play podcast
         }
 
         recyclerView.adapter = podcastAdapter
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        RetrofitClient.instance.searchPodcasts("technology")
+        buttonSearch.setOnClickListener {
+            val query = editSearch.text.toString().trim()
+            if (query.isNotEmpty()) {
+                searchPodcasts(query)
+            } else {
+                Toast.makeText(this, "Please enter a search term", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // Load initial data with default search term
+        searchPodcasts("technology")
+    }
+
+    private fun searchPodcasts(term: String) {
+        RetrofitClient.instance.searchPodcasts(term)
             .enqueue(object : Callback<PodcastResponse> {
-                override fun onResponse(
-                    call: Call<PodcastResponse>,
-                    response: Response<PodcastResponse>
-                ) {
+                override fun onResponse(call: Call<PodcastResponse>, response: Response<PodcastResponse>) {
                     if (response.isSuccessful) {
                         val podcasts = response.body()?.results ?: emptyList()
-                        // Actualizar adapter con la lista recibida
                         podcastAdapter = PodcastAdapter(podcasts) { podcast ->
-                            // Manejar click en podcast
+                            // TODO: handle click on podcast item
                         }
                         recyclerView.adapter = podcastAdapter
                     } else {
-                        println("API call failed with code: ${response.code()}")
+                        Toast.makeText(this@MainActivity, "Error: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 }
 
                 override fun onFailure(call: Call<PodcastResponse>, t: Throwable) {
-                    println("API call failed: ${t.message}")
+                    Toast.makeText(this@MainActivity, "Failure: ${t.message}", Toast.LENGTH_SHORT).show()
                 }
             })
     }
