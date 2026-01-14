@@ -29,6 +29,16 @@
         app:layout_constraintBottom_toBottomOf="@id/editSearch"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/editSearch"
+        app:layout_constraintBottom_toTopOf="@id/recyclerPodcasts"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerPodcasts"
         android:layout_width="0dp"

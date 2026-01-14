@@ -1,16 +1,19 @@
 package com.androidapp2_0.superpodcast
 
-import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import okhttp3.*
-import org.json.JSONObject
-import java.io.IOException
+import com.androidapp2_0.superpodcast.network.RetrofitClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,8 +21,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: PodcastAdapter
     private lateinit var editSearch: EditText
     private lateinit var buttonSearch: Button
+    private lateinit var progressBar: ProgressBar
 
-    private val client = OkHttpClient()
     private val podcastList = mutableListOf<Podcast>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,9 +32,10 @@ class MainActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerPodcasts)
         editSearch = findViewById(R.id.editSearch)
         buttonSearch = findViewById(R.id.buttonSearch)
+        progressBar = findViewById(R.id.progressBar)
 
         adapter = PodcastAdapter(podcastList) { podcast ->
-            val intent = Intent(this, DetailActivity::class.java).apply {
+            val intent = android.content.Intent(this, DetailActivity::class.java).apply {
                 putExtra(DetailActivity.EXTRA_TITLE, podcast.collectionName)
                 putExtra(DetailActivity.EXTRA_ARTIST, podcast.artistName)
                 putExtra(DetailActivity.EXTRA_DESCRIPTION, podcast.description ?: "")
@@ -48,6 +52,8 @@ class MainActivity : AppCompatActivity() {
             val term = editSearch.text.toString().trim()
             if (term.isNotEmpty()) {
                 searchPodcasts(term)
+            } else {
+                Toast.makeText(this, "Ingrese un término para buscar", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -55,52 +61,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchPodcasts(term: String) {
-        val url = "https://itunes.apple.com/search?entity=podcast&term=${term}"
-
-        val request = Request.Builder().url(url).build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Error searching podcasts", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            progressBar.visibility = View.VISIBLE
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    RetrofitClient.instance.searchPodcasts(term).execute()
                 }
-            }
 
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "Error searching podcasts", Toast.LENGTH_SHORT).show()
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    podcastList.clear()
+                    body?.results?.forEach { podcast ->
+                        if (!podcast.feedUrl.isNullOrEmpty()) {
+                            podcastList.add(
+                                Podcast(
+                                    collectionName = podcast.collectionName,
+                                    artistName = podcast.artistName,
+                                    feedUrl = podcast.feedUrl ?: "",
+                                    description = "", // Podrías agregar descripción si la tienes
+                                    artworkUrl100 = podcast.artworkUrl100
+                                )
+                            )
+                        }
                     }
-                    return
-                }
-
-                val body = response.body?.string() ?: ""
-
-                val json = JSONObject(body)
-                val results = json.getJSONArray("results")
-
-                podcastList.clear()
-
-                for (i in 0 until results.length()) {
-                    val item = results.getJSONObject(i)
-                    val feedUrl = item.optString("feedUrl", "")
-                    if (feedUrl.isEmpty()) continue // Ignorar este item si no tiene feedUrl
-
-                    val podcast = Podcast(
-                        collectionName = item.getString("collectionName"),
-                        artistName = item.getString("artistName"),
-                        feedUrl = feedUrl,
-                        description = item.optString("description", ""),
-                        artworkUrl100 = item.optString("artworkUrl100", "")
-                    )
-                    podcastList.add(podcast)
-                }
-
-                runOnUiThread {
                     adapter.notifyDataSetChanged()
+                } else {
+                    Toast.makeText(this@MainActivity, "Error en la respuesta del servidor", Toast.LENGTH_SHORT).show()
                 }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "Error al buscar podcasts: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                progressBar.visibility = View.GONE
             }
-        })
+        }
     }
 
     data class Podcast(
