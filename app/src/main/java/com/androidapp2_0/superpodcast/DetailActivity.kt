@@ -33,12 +33,11 @@ class DetailActivity : AppCompatActivity() {
     private lateinit var buttonVolumeDown: Button
     private lateinit var buttonBack: Button
     private lateinit var audioManager: AudioManager
-    private lateinit var seekBarAudio: SeekBar
-    private lateinit var progressBarAudio: ProgressBar
+    private lateinit var progressBarAudio: SeekBar
 
     private var isPlaying = false
     private var previewUrl: String? = null
-    private var updateSeekBarJob: Job? = null
+    private var updateProgressJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,31 +50,31 @@ class DetailActivity : AppCompatActivity() {
         buttonVolumeUp = findViewById(R.id.buttonVolumeUp)
         buttonVolumeDown = findViewById(R.id.buttonVolumeDown)
         buttonBack = findViewById(R.id.buttonBack)
-        seekBarAudio = findViewById(R.id.seekBarAudio)
         progressBarAudio = findViewById(R.id.progressBarAudio)
 
-        buttonBack.setOnClickListener {
-            finish()
-        }
+        progressBarAudio.max = 100  // progreso en porcentaje
+
+        buttonBack.setOnClickListener { finish() }
 
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "No Title"
         val artist = intent.getStringExtra(EXTRA_ARTIST) ?: "Unknown Artist"
-        val description = intent.getStringExtra(EXTRA_DESCRIPTION) ?: "No Description"
         previewUrl = intent.getStringExtra(EXTRA_PREVIEW_URL)
         val artworkUrl = intent.getStringExtra(EXTRA_ARTWORK_URL)
 
         findViewById<TextView>(R.id.textTitle).text = title
         findViewById<TextView>(R.id.textArtist).text = artist
-        findViewById<TextView>(R.id.textDescription).text = description
 
         if (!artworkUrl.isNullOrEmpty()) {
             Glide.with(this).load(artworkUrl).into(imageArtwork)
         }
 
-        seekBarAudio.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        progressBarAudio.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    mediaPlayer?.seekTo(progress)
+                    mediaPlayer?.let {
+                        val newPosition = (it.duration * progress) / 100
+                        it.seekTo(newPosition)
+                    }
                 }
             }
 
@@ -117,7 +116,6 @@ class DetailActivity : AppCompatActivity() {
     private fun loadAudioFromFeed(feedUrl: String) {
         Thread {
             val audioUrl = getFirstAudioUrlFromFeed(feedUrl)
-
             runOnUiThread {
                 if (audioUrl != null) {
                     playAudio(audioUrl)
@@ -169,37 +167,36 @@ class DetailActivity : AppCompatActivity() {
                     it.start()
                     this@DetailActivity.isPlaying = true
                     playPauseButton.text = "Pause"
-                    progressBarAudio.visibility = ProgressBar.GONE
-                    seekBarAudio.max = it.duration
+                    progressBarAudio.visibility = SeekBar.VISIBLE
 
-                    updateSeekBarJob = lifecycleScope.launch {
-                        while (isPlaying) {
-                            seekBarAudio.progress = it.currentPosition
-                            delay(500)
+                    updateProgressJob = lifecycleScope.launch {
+                        while (isPlaying && it.isPlaying) {
+                            val progressPercent = (it.currentPosition * 100) / it.duration
+                            progressBarAudio.progress = progressPercent
+                            delay(300)
                         }
                     }
                 }
                 setOnCompletionListener {
                     this@DetailActivity.isPlaying = false
                     playPauseButton.text = "Play"
-                    seekBarAudio.progress = 0
-                    updateSeekBarJob?.cancel()
+                    progressBarAudio.progress = 0
+                    updateProgressJob?.cancel()
                 }
                 setOnErrorListener { _, _, _ ->
                     Toast.makeText(this@DetailActivity, "Error playing audio", Toast.LENGTH_SHORT).show()
                     this@DetailActivity.isPlaying = false
                     playPauseButton.text = "Play"
-                    updateSeekBarJob?.cancel()
-                    progressBarAudio.visibility = ProgressBar.GONE
+                    progressBarAudio.visibility = SeekBar.GONE
+                    updateProgressJob?.cancel()
                     true
                 }
                 prepareAsync()
-                progressBarAudio.visibility = ProgressBar.VISIBLE
             }
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Cannot play audio", Toast.LENGTH_SHORT).show()
-            progressBarAudio.visibility = ProgressBar.GONE
+            progressBarAudio.visibility = SeekBar.GONE
         }
     }
 
@@ -207,12 +204,12 @@ class DetailActivity : AppCompatActivity() {
         mediaPlayer?.pause()
         isPlaying = false
         playPauseButton.text = "Play"
-        updateSeekBarJob?.cancel()
+        updateProgressJob?.cancel()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        updateSeekBarJob?.cancel()
+        updateProgressJob?.cancel()
         mediaPlayer?.release()
         mediaPlayer = null
     }
